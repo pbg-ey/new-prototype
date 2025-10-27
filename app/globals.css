@@ -156,3 +156,44 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.sidekick-editor {
+  line-height: 1.7;
+  font-size: 0.9375rem;
+}
+
+.sidekick-editor p {
+  margin: 0.75rem 0;
+}
+
+.sidekick-editor h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  font-weight: 600;
+  margin: 1.75rem 0 0.75rem;
+}
+
+.sidekick-editor a {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.sidekick-editor a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.dark .sidekick-editor a {
+  color: #60a5fa;
+}
+
+.sidekick-editor ::selection {
+  background-color: #bfdbfe;
+  color: #0f172a;
+}
+
+.dark .sidekick-editor ::selection {
+  background-color: rgba(37, 99, 235, 0.5);
+  color: #e0f2fe;
+}

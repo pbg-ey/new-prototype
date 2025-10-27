@@ -30,9 +30,10 @@ export type SourceItem = {
   href?: string;
   missing?: boolean;
   origin?: "upload" | "link";
+  preview?: string;
 };
 
-export type IssueType = "irrelevant" | "misinterpretation" | "misapplication";
+export type IssueType = "missing_detail" | "placeholder_language" | "unsupported_comparison";
 
 export type ValidationIssue = {
   id: string;
@@ -43,4 +44,7 @@ export type ValidationIssue = {
   excerpt: string;
   findPattern: string;
   fixOptions: string[];
+  autoFix?: string;
+  sourceId?: string;
+  sourceExcerpt?: string;
 };

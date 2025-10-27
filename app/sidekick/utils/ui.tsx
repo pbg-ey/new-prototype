@@ -36,9 +36,3 @@ export function useAutoScroll(
     el.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [trigger, enabled, el]);
 }
-
-export function findRange(haystack: string, needle: string): { start: number; end: number } | null {
-  const start = haystack.indexOf(needle);
-  if (start === -1) return null;
-  return { start, end: start + needle.length };
-}

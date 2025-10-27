@@ -54,7 +54,7 @@ export function ValidatePanel({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <SeverityBadge level={iss.severity} />
                   <Badge variant="outline" className="capitalize whitespace-nowrap text-xs">
-                    {iss.type}
+                    {iss.type.replace(/_/g, " ")}
                   </Badge>
                   <div className="text-sm font-medium flex-1 min-w-[140px] break-words">{iss.title}</div>
                   <Badge variant="outline" className="whitespace-nowrap text-xs">
