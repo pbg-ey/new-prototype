@@ -1,8 +1,8 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Lightbulb, Sparkles, Upload } from "lucide-react";
 import type { Recommendation } from "../../type";
+import { Badge } from "@/components/ui/badge";
 
 export function RecommendationCard({ rec, onAct }: { rec: Recommendation; onAct: (rec: Recommendation) => void }) {
   return (
@@ -14,8 +14,8 @@ export function RecommendationCard({ rec, onAct }: { rec: Recommendation; onAct:
       </CardHeader>
       <CardContent className="pt-0 text-xs text-muted-foreground flex flex-wrap gap-2">
         <Badge variant="outline">{rec.intent}</Badge>
-        <Badge variant={rec.priority === "high" ? "destructive" : rec.priority === "med" ? "default" : "secondary"}>
-          {rec.priority}
+        <Badge variant="secondary" className="capitalize">
+          {rec.category}
         </Badge>
         {rec.context?.section && <Badge variant="outline">Section: {rec.context.section}</Badge>}
         {rec.context?.issue && <Badge variant="outline">Issue: {rec.context.issue}</Badge>}

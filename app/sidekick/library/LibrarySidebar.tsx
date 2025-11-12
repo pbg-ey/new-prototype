@@ -2,10 +2,21 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Link2, ChevronLeft } from "lucide-react";
-import type { SourceCategory, SourceItem } from "../type";
+import {
+  FileText,
+  Upload,
+  Link2,
+  ChevronLeft,
+  Plus,
+  Mail,
+  FileEdit,
+  BookOpen,
+  ExternalLink,
+  PanelRightOpen,
+  Table,
+} from "lucide-react";
+import type { SourceCategory, SourceItem, ProjectDocument } from "../type";
 
 function SourceRow({
   s,
@@ -26,47 +37,55 @@ function SourceRow({
     }
   };
 
+
+
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={handleActivate}
       onKeyDown={handleKeyDown}
-      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left cursor-pointer ${
-        active ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted/80"
+      className={`w-full rounded-md border px-3 py-2 text-left cursor-pointer transition-colors ${
+        active ? "border-primary bg-primary/5" : "border-muted hover:bg-muted/60"
       }`}
     >
-      <FileText className="w-4 h-4" />
-      <div className="flex-1 min-w-0">
-        <div className="truncate text-sm font-medium">{s.name}</div>
-        {s.href && (
-          <div className="truncate text-[11px] text-muted-foreground">
-            {s.href.replace(/^https?:\/\//, "")}
+      <div className="flex items-start gap-2">
+        <FileText className="mt-1 w-4 h-4 text-muted-foreground shrink-0" />
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="text-sm font-medium leading-5 break-words">{s.name}</div>
+          {s.href && (
+            <div className="text-[11px] text-muted-foreground break-all leading-4">
+              {s.href.replace(/^https?:\/\//, "")}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+            {s.missing && (
+              <Badge variant="destructive" className="text-[10px] uppercase tracking-wide">
+                Missing
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-[10px] capitalize">
+              {s.category === "prior" ? "prior work" : s.category}
+            </Badge>
           </div>
-        )}
+        </div>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onLink(s);
+            }}
+          >
+            <Link2 className="w-4 h-4" />
+          </Button>
+          <div className="text-[11px] text-muted-foreground whitespace-nowrap leading-3">
+            {new Date(s.addedAt).toLocaleDateString()}
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-1">
-        {s.missing && (
-          <Badge variant="destructive" className="text-[10px] uppercase tracking-wide">
-            Missing
-          </Badge>
-        )}
-        <Badge variant="outline" className="text-[10px] capitalize">
-          {s.category === "prior" ? "prior work" : s.category}
-        </Badge>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground"
-          onClick={(e) => {
-            e.stopPropagation();
-            onLink(s);
-          }}
-        >
-          <Link2 className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-      <div className="text-[11px] text-muted-foreground w-16 text-right">{new Date(s.addedAt).toLocaleDateString()}</div>
     </div>
   );
 }
@@ -89,34 +108,107 @@ function highlightPreview(text: string, term?: string | null) {
   );
 }
 
+const DOCUMENT_LABELS: Record<ProjectDocument["kind"], string> = {
+  memo: "Memo",
+  email: "Email",
+  draft: "Draft",
+  explanation: "Explainer",
+  matrix: "Matrix",
+};
+
+function iconForDocument(kind: ProjectDocument["kind"]) {
+  if (kind === "email") return <Mail className="w-4 h-4" />;
+  if (kind === "draft") return <FileEdit className="w-4 h-4" />;
+  if (kind === "explanation") return <BookOpen className="w-4 h-4" />;
+  if (kind === "matrix") return <Table className="w-4 h-4" />;
+  return <FileText className="w-4 h-4" />;
+}
+
+function DocumentRow({
+  doc,
+  onSelect,
+  active,
+}: {
+  doc: ProjectDocument;
+  onSelect: (doc: ProjectDocument) => void;
+  active: boolean;
+}) {
+  const handleActivate = () => onSelect(doc);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect(doc);
+    }
+  };
+  const label = DOCUMENT_LABELS[doc.kind];
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleActivate}
+      onKeyDown={handleKeyDown}
+      className={`w-full rounded-md border px-3 py-2 cursor-pointer transition-colors ${
+        active ? "border-primary bg-primary/5" : "border-muted hover:bg-muted/60"
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <div className="mt-1 shrink-0 text-muted-foreground">{iconForDocument(doc.kind)}</div>
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="text-sm font-medium leading-5 break-words">{doc.name}</div>
+          <div className="text-xs text-muted-foreground capitalize leading-4">{label}</div>
+        </div>
+        <div className="text-[11px] text-muted-foreground whitespace-nowrap leading-4">
+          {new Date(doc.updatedAt).toLocaleDateString()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LibrarySidebar({
+  documents,
+  activeDocumentId,
+  onSelectDocument,
+  onCreateDocument,
+  onUploadSource,
+  onOpenInWorkspace,
   sources,
   query,
   categoryFilter,
   onQuery,
   onCategory,
-  onPickFile,
   onInsertLink,
   selectedSource,
   onSelectSource,
   onClosePreview,
   sourceHighlight,
 }: {
+  documents: ProjectDocument[];
+  activeDocumentId: string | null;
+  onSelectDocument: (doc: ProjectDocument) => void;
+  onCreateDocument: () => void;
+  onUploadSource: () => void;
+  onOpenInWorkspace: (src: SourceItem) => void;
   sources: SourceItem[];
   query: string;
   categoryFilter: "all" | SourceCategory;
   onQuery: (v: string) => void;
   onCategory: (v: "all" | SourceCategory) => void;
-  onPickFile: () => void;
   onInsertLink: (src: SourceItem) => void;
   selectedSource: SourceItem | null;
   onSelectSource: (src: SourceItem) => void;
   onClosePreview: () => void;
   sourceHighlight?: string | null;
 }) {
-  const filtered = sources.filter((s) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredDocuments = documents.filter((doc) => {
+    if (!normalizedQuery) return true;
+    return doc.name.toLowerCase().includes(normalizedQuery);
+  });
+  const filteredSources = sources.filter((s) => {
     const matchesCat = categoryFilter === "all" || s.category === categoryFilter;
-    const matchesQuery = !query.trim() || s.name.toLowerCase().includes(query.toLowerCase());
+    const matchesQuery = !normalizedQuery || s.name.toLowerCase().includes(normalizedQuery);
     return matchesCat && matchesQuery;
   });
 
@@ -126,22 +218,54 @@ export function LibrarySidebar({
       .map((p) => p.trim())
       .filter(Boolean);
     return (
-      <div className="w-72 min-w-[18rem] max-w-[18rem] h-full flex flex-col border-r bg-background">
-        <div className="px-3 py-3 border-b flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onClosePreview} className="gap-1">
-            <ChevronLeft className="w-4 h-4" /> Back
-          </Button>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">{selectedSource.name}</div>
-            {selectedSource.href && (
-              <div className="text-[11px] text-muted-foreground truncate">
-                {selectedSource.href.replace(/^https?:\/\//, "")}
-              </div>
-            )}
+      <div className="w-[22rem] min-w-[22rem] max-w-[22rem] h-full flex flex-col border-r bg-background">
+        <div className="px-3 py-3 border-b space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" size="sm" onClick={onClosePreview} className="gap-1">
+              <ChevronLeft className="w-4 h-4" /> Back
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => {
+                onOpenInWorkspace(selectedSource);
+                onClosePreview();
+              }}
+              aria-label="Open in workspace"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+            </Button>
           </div>
-          <Button size="sm" variant="outline" onClick={() => onInsertLink(selectedSource)}>
-            Cite
-          </Button>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 space-y-1">
+              <div className="text-sm font-semibold leading-5 break-words">{selectedSource.name}</div>
+              {selectedSource.href && (
+                <div className="text-[11px] text-muted-foreground break-all leading-4">
+                  {selectedSource.href.replace(/^https?:\/\//, "")}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => onInsertLink(selectedSource)}
+                aria-label="Cite source"
+              >
+                <Link2 className="w-4 h-4" />
+              </Button>
+              {selectedSource.href && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => window.open(selectedSource.href ?? "#", "_blank", "noopener,noreferrer")}
+                  aria-label="Open source link"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
         <div className="px-3 py-2 border-b text-[11px] text-muted-foreground flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] capitalize">
@@ -165,47 +289,81 @@ export function LibrarySidebar({
   }
 
   return (
-    <div className="w-72 min-w-[18rem] max-w-[18rem] h-full flex flex-col border-r bg-background">
-      <div className="px-3 py-3 border-b flex items-center gap-2">
-        <Input placeholder="Search library..." value={query} onChange={(e) => onQuery(e.target.value)} className="flex-1" />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="icon" variant="outline" onClick={onPickFile} aria-label="Upload source">
-              <Upload className="w-4 h-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Add source</TooltipContent>
-        </Tooltip>
+    <div className="w-[22rem] min-w-[22rem] max-w-[22rem] h-full flex flex-col border-r bg-background">
+      <div className="px-3 py-3 border-b">
+        <Input
+          placeholder="Search documents and sources..."
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          className="w-full"
+        />
       </div>
 
-      <div className="px-3 py-2 border-b flex flex-wrap items-center gap-2 text-xs">
-        {(["all", "facts", "laws", "explanations", "prior"] as const).map((cat) => (
-          <Button
-            key={cat}
-            size="sm"
-            variant={categoryFilter === cat ? "default" : "outline"}
-            onClick={() => onCategory(cat)}
-            className="h-7 px-2 text-xs capitalize whitespace-nowrap"
-          >
-            {cat === "prior" ? "prior work" : cat}
-          </Button>
-        ))}
-      </div>
+      <ScrollArea className="flex-1">
+        <div className="py-3 space-y-6 pr-1">
+          <section>
+            <div className="px-3 flex items-center justify-between gap-2">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Documents</span>
+              <Button size="sm" variant="outline" className="gap-1 whitespace-nowrap" onClick={onCreateDocument}>
+                <Plus className="w-4 h-4" /> Add
+              </Button>
+            </div>
+            <div className="px-3 pt-3 space-y-1">
+              {filteredDocuments.length === 0 ? (
+                <div className="text-xs text-muted-foreground">No documents yet. Add one to begin drafting.</div>
+              ) : (
+                filteredDocuments.map((doc) => (
+                  <DocumentRow
+                    key={doc.id}
+                    doc={doc}
+                    active={doc.id === activeDocumentId}
+                    onSelect={onSelectDocument}
+                  />
+                ))
+              )}
+            </div>
+          </section>
 
-      <ScrollArea className="flex-1 p-2">
-        {filtered.length === 0 && (
-          <div className="text-xs text-muted-foreground px-2">No sources yet. Add files to populate your library.</div>
-        )}
-        <div className="space-y-1">
-          {filtered.map((s) => (
-            <SourceRow
-              key={s.id}
-              s={s}
-              onLink={onInsertLink}
-              onSelect={onSelectSource}
-              active={selectedSource?.id === s.id}
-            />
-          ))}
+          <section>
+            <div className="px-3 flex items-center justify-between gap-2">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Sources</span>
+              <Button size="sm" variant="outline" className="gap-1 whitespace-nowrap" onClick={onUploadSource}>
+                <Upload className="w-4 h-4" /> Add
+              </Button>
+            </div>
+            <div className="px-3 pt-3 flex flex-wrap items-center gap-2">
+              {(["all", "facts", "laws", "explanations", "prior"] as const).map((cat) => (
+                <Button
+                  key={cat}
+                  size="sm"
+                  variant={categoryFilter === cat ? "default" : "outline"}
+                  onClick={() => onCategory(cat)}
+                  className="h-7 px-3 text-xs capitalize whitespace-nowrap"
+                >
+                  {cat === "prior" ? "prior work" : cat}
+                </Button>
+              ))}
+            </div>
+            <div className="px-3 pt-3">
+              {filteredSources.length === 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  No sources yet. Add files to populate your library.
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredSources.map((s) => (
+                    <SourceRow
+                      key={s.id}
+                      s={s}
+                      onLink={onInsertLink}
+                      onSelect={onSelectSource}
+                      active={selectedSource?.id === s.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </ScrollArea>
     </div>

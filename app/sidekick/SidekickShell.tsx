@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   Bold,
+  ChevronLeft,
   Heading2,
   Italic,
   List,
@@ -15,21 +16,35 @@ import {
   Save,
   Sparkles,
   Trash2,
+  ExternalLink,
+  Link2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { Recommendation, SourceItem, SourceCategory, ValidationIssue } from "./type";
+import type {
+  Recommendation,
+  SourceItem,
+  SourceCategory,
+  ValidationIssue,
+  ProjectDocument,
+  DocumentKind,
+  MatrixDocument,
+  AIThought,
+  AIPhase,
+} from "./type";
 import dynamic from "next/dynamic";
 import type { EditorHandle } from "./editor/SimpleEditor";
 import { LibrarySidebar } from "./library/LibrarySidebar";
 import { useAutoScroll } from "./utils/ui";
 import { AllActionsPanel } from "./right-panel/ActionsPanel";
 import { ValidatePanel } from "./right-panel/ValidatePanel";
+import { ActionWorkflow } from "./right-panel/ActionWorkflow";
 import { Bubble } from "./right-panel/_shared/Bubble";
 import { EditCard } from "./right-panel/_shared/EditCard";
 import { UploadPromptCard } from "./right-panel/_shared/UploadPromptCard";
@@ -37,33 +52,46 @@ import { RecommendationsDock } from "./right-panel/_shared/RecommendationsDock";
 
 type RecStatus = Recommendation["status"];
 
-const INITIAL_RECS: Recommendation[] = [
+// SIMULATION: Start with 2 Company Facts
+const INITIAL_RECS: Recommendation[] = [];
+
+// Store the real initial recommendations for the startup sequence
+const STARTUP_RECS: Recommendation[] = [
   {
-    id: "rec-1",
-    title: "Add evidence: NJ marketplace facilitator nexus (2023-2025)",
+    id: "sim-fact-1",
+    title: "Compile NJ marketplace fact exhibits", 
     intent: "add_evidence",
-    priority: "high",
+    category: "facts",
     status: "suggested",
-    context: { section: "Analysis", issue: "Nexus", jurisdictions: ["NJ"] },
+    summary: "Collect gross receipts and transaction data to verify NJ marketplace thresholds.",
+    instructions: "Add or review the files to be saved to the current research.",
+    context: { section: "Facts", issue: "Economic Nexus", jurisdictions: ["NJ"] },
+    aiReasoning: {
+      trigger: "Phase 1 depth-first methodology: broad marketplace analysis",
+      reasoning: "Following our structured research approach - starting broad with marketplace activity detection, then narrowing to specific NJ thresholds ($100k revenue/200 transactions). This factual foundation is essential before Phase 2 legal research.",
+      thoughtId: "startup-thought-1"
+    }
   },
   {
-    id: "rec-2",
-    title: "Draft reconciliation paragraph about conflicting rulings",
-    intent: "draft",
-    priority: "med",
-    status: "evidence_added",
-    context: { section: "Analysis", issue: "Exemptions", jurisdictions: ["NY"] },
-  },
-  {
-    id: "rec-3",
-    title: "Re-score citations in Section 3 after new upload",
-    intent: "re_score",
-    priority: "low",
-    status: "ready_to_draft",
-    context: { section: "Law", issue: "Digital goods", jurisdictions: ["NY"] },
+    id: "sim-fact-2",
+    title: "Gather digital goods transaction records",
+    intent: "add_evidence", 
+    category: "facts",
+    status: "suggested",
+    summary: "Document marketplace sales of digital products and services for CY2024.",
+    instructions: "Add or review the files to be saved to the current research.",
+    suggestedAttachments: [
+      { id: "sug-digital-1", name: "Digital Sales Report Q1-Q4 2024.xlsx", kind: "file" },
+      { id: "sug-digital-2", name: "Marketplace Transaction Log.csv", kind: "file" },
+    ],
+    context: { section: "Facts", issue: "Digital Products", jurisdictions: ["NJ"] },
+    aiReasoning: {
+      trigger: "Phase 1 narrow focus: digital product transaction specifics", 
+      reasoning: "Applying depth-first fact-gathering - broad digital goods category established, now narrowing to transaction-level sourcing details. Customer location data is critical for Phase 2 codes & regulations research on taxability rules.",
+      thoughtId: "startup-thought-2"
+    }
   },
 ];
-
 
 const SAMPLE_SOURCE_CONTENT = {
   statute:
@@ -94,12 +122,23 @@ const INITIAL_SOURCES: SourceItem[] = [
     id: "src-nj-guidance",
     name: "NJ Division of Taxation ST-18",
     kind: "pdf",
-    category: "explanations",
+    category: "laws",
     addedAt: "2024-04-02T10:00:00.000Z",
     href: "https://www.state.nj.us/treasury/taxation/pdf/pubs/sales/st-18.pdf",
     missing: false,
     origin: "upload",
     preview: SAMPLE_SOURCE_CONTENT.guidance,
+  },
+  {
+    id: "src-marketplace-facts",
+    name: "Marketplace sales workpaper excerpt",
+    kind: "pdf",
+    category: "facts",
+    addedAt: "2024-04-08T10:00:00.000Z",
+    href: "https://example.com/workpapers/marketplace-facts",
+    missing: false,
+    origin: "upload",
+    preview: SAMPLE_SOURCE_CONTENT.facts,
   },
   {
     id: "src-ny-tsb",
@@ -272,6 +311,135 @@ function buildWizardDocPreview({
     analysisHtml,
   ].join("");
 }
+
+const CLEAN_FACTS_SENTENCE = FACTS_SENTENCE.replace(/\[(.*?)\]/g, "$1");
+const CLEAN_ANALYSIS_SENTENCE = ANALYSIS_SENTENCE.replace(/\[(.*?)\]/g, "$1");
+
+const INITIAL_EMAIL_HTML = paragraphsFrom(
+  `Hi team,
+
+${CLEAN_FACTS_SENTENCE}
+
+Thanks,
+AI Sidekick`,
+  "Follow-up email draft."
+);
+
+const INITIAL_EXPLAINER_HTML = paragraphsFrom(
+  SAMPLE_SOURCE_CONTENT.guidance,
+  SAMPLE_SOURCE_CONTENT.guidance
+);
+
+const INITIAL_DRAFT_HTML = [
+  "<h1>Work in Progress Notes</h1>",
+  paragraphsFrom(
+    [
+      "Outstanding checkpoints before finalizing the memo:",
+      "- Reconcile NJ nexus calculations with the most recent sales data.",
+      "- Summarize Division of Taxation guidance on digital facilitators.",
+      `- Tie analysis back to jurisdictional focus: ${CLEAN_ANALYSIS_SENTENCE}.`,
+    ].join("\n"),
+    "Capture outstanding checkpoints before finalizing the memo."
+  ),
+].join("");
+
+const INITIAL_DOCUMENTS: ProjectDocument[] = [
+  {
+    id: "doc-memo-main",
+    name: "Advisory Memorandum",
+    kind: "memo",
+    content: INITIAL_DOC,
+    createdAt: "2024-04-10T10:00:00.000Z",
+    updatedAt: "2024-04-10T10:00:00.000Z",
+  },
+];
+
+const EMPTY_DOC_HTML = "<p>Start drafting here...</p>";
+
+const DEFAULT_MATRIX: MatrixDocument = {
+  jurisdictions: ["NJ", "NY", "CA"],
+  rows: [
+    {
+      question: "Economic nexus threshold satisfied?",
+      cells: [
+        { value: "Yes. $100k or 200 transactions (CY2024). Cite N.J.S.A. 54:32B-3.6." },
+        { value: "Yes. $500k receipts or 100 transactions. Cite NY Tax Law § 1101(b)(8)(iv)." },
+        { value: "Likely. $500k receipts. Confirm CA Rev. & Tax. Code § 6203." },
+      ],
+    },
+    {
+      question: "Marketplace facilitator registration required?",
+      cells: [
+        { value: "Yes — registration mandated post-threshold. Reference ST-18 guidance." },
+        { value: "Yes — required once obligated to collect tax. Cite TSB-A-19(8)S." },
+        { value: "Yes — CDTFA requires registration once threshold met." },
+      ],
+    },
+    {
+      question: "Document retention / reporting notes",
+      cells: [
+        { value: "Maintain channel-level transaction reports. Cite NJ TAC 18:24-2.5." },
+        { value: "Retain marketplace agreements & remittance proofs. Cite TSB-A-19(8)S." },
+        { value: "Track marketplace level invoices for CDTFA audit support." },
+      ],
+    },
+  ],
+};
+
+const cloneMatrix = (matrix: MatrixDocument): MatrixDocument =>
+  JSON.parse(JSON.stringify(matrix)) as MatrixDocument;
+
+type TemplateKey = "memo" | "email" | "empty" | "matrix";
+
+type TemplateDefinition = {
+  kind: DocumentKind;
+  name: string;
+  content?: string;
+  matrix?: MatrixDocument;
+};
+
+const DOCUMENT_TEMPLATES: Record<TemplateKey, TemplateDefinition> = {
+  memo: { kind: "memo", name: "Memo Draft", content: INITIAL_DOC },
+  email: { kind: "email", name: "Email Draft", content: INITIAL_EMAIL_HTML },
+  empty: { kind: "draft", name: "Blank Document", content: EMPTY_DOC_HTML },
+  matrix: { kind: "matrix", name: "Matrix", matrix: DEFAULT_MATRIX },
+};
+
+const DOCUMENT_TEMPLATE_OPTIONS: Array<{
+  value: TemplateKey;
+  title: string;
+  description: string;
+}> = [
+  {
+    value: "memo",
+    title: "Memo",
+    description: "Full advisory memo outline with issue, facts, law, and analysis sections.",
+  },
+  {
+    value: "email",
+    title: "Email",
+    description: "Client-facing summary email template to share key findings.",
+  },
+  {
+    value: "empty",
+    title: "Blank",
+    description: "Start from a clean slate and structure the document yourself.",
+  },
+  {
+    value: "matrix",
+    title: "Matrix",
+    description: "Tabular matrix for multi-jurisdiction comparisons with per-state answers and citations.",
+  },
+];
+
+const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
+  memo: "Memo",
+  email: "Email",
+  draft: "Draft",
+  explanation: "Explainer",
+  matrix: "Matrix",
+};
+
 type ParsedLink = {
   href: string;
   label?: string;
@@ -391,14 +559,16 @@ export function SidekickShell() {
   const [messages, setMessages] = React.useState<React.ReactNode[]>([]);
   const [input, setInput] = React.useState("");
   const [awaitingDraftSpec, setAwaitingDraftSpec] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<"chat" | "actions" | "validate">("chat");
+  const [activeTab, setActiveTab] = React.useState<"chat" | "actions" | "validate" | "workflow">("chat");
   const [projectName] = React.useState("Acme Retail - AI Tax Advisory");
+  const [documents, setDocuments] = React.useState<ProjectDocument[]>(INITIAL_DOCUMENTS);
+  const [activeDocumentId, setActiveDocumentId] = React.useState<string>(INITIAL_DOCUMENTS[0]?.id ?? "");
   const [sources, setSources] = React.useState<SourceItem[]>(INITIAL_SOURCES);
   const [selectedSourceId, setSelectedSourceId] = React.useState<string | null>(null);
   const [sourceHighlight, setSourceHighlight] = React.useState<string | null>(null);
+  const [workspaceSourceId, setWorkspaceSourceId] = React.useState<string | null>(null);
   const [libQuery, setLibQuery] = React.useState("");
   const [libCategory, setLibCategory] = React.useState<"all" | SourceCategory>("all");
-  const [doc, setDoc] = React.useState(INITIAL_DOC);
   const [showLibrary, setShowLibrary] = React.useState(true);
   const [showRightPanel, setShowRightPanel] = React.useState(true);
   const [showAttachmentPicker, setShowAttachmentPicker] = React.useState(false);
@@ -418,17 +588,369 @@ export function SidekickShell() {
   const [wizardLibraryUploads, setWizardLibraryUploads] = React.useState<
     { name: string; category: SourceCategory }[]
   >([]);
+  const [showDocModal, setShowDocModal] = React.useState(false);
+  const [docModalMode, setDocModalMode] = React.useState<"template" | "upload">("template");
+  const [docModalTemplate, setDocModalTemplate] = React.useState<TemplateKey>("memo");
+  const [docModalName, setDocModalName] = React.useState("Untitled Document");
+  const [docModalNameTouched, setDocModalNameTouched] = React.useState(false);
+  const [docModalKind, setDocModalKind] = React.useState<DocumentKind>("memo");
+  const [docModalFile, setDocModalFile] = React.useState<File | null>(null);
+  const [docModalFileContent, setDocModalFileContent] = React.useState<string | null>(null);
+  const [showSourceModal, setShowSourceModal] = React.useState(false);
+  const [sourceModalCategory, setSourceModalCategory] = React.useState<SourceCategory>("facts");
+  const [sourceModalFile, setSourceModalFile] = React.useState<File | null>(null);
+  const [sourceModalPreview, setSourceModalPreview] = React.useState<string | null>(null);
+
+  // 🚀 STARTUP SEQUENCE - First-time actions tab initialization
+  const [hasStartedUp, setHasStartedUp] = React.useState(false);
+  const [isStartingUp, setIsStartingUp] = React.useState(false);
+  const [startupPhase, setStartupPhase] = React.useState(0);
+
+  // 🧠 AI REASONING SYSTEM - Responds to actual user progress
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
+  const [transitionThoughts, setTransitionThoughts] = React.useState<string[]>([]);
+  const [currentThought, setCurrentThought] = React.useState(0);
+  const [lastStageState, setLastStageState] = React.useState<string>('starting');
+  
+  // 🎯 AI STRATEGIC & TACTICAL THINKING
+  const [recentThoughts, setRecentThoughts] = React.useState<AIThought[]>([
+    {
+      id: "startup-thought-1",
+      timestamp: new Date(),
+      phase: "facts",
+      trigger: "Initiating Phase 1 — Company Facts research",
+      reasoning: "Starting broad with digital marketplace analysis, then narrowing to specific NJ nexus thresholds and transaction patterns. Need to establish factual foundation before legal research.",
+      actionCreated: "Compile NJ marketplace fact exhibits"
+    },
+    {
+      id: "startup-thought-2", 
+      timestamp: new Date(),
+      phase: "facts",
+      trigger: "Digital products require detailed fact-gathering",
+      reasoning: "Phase 1 depth-first approach: broad digital goods category, then narrow to specific sourcing and customer location facts needed for Phase 2 legal research.",
+      actionCreated: "Gather digital goods transaction records"
+    }
+  ]);
+  const [currentPhase, setCurrentPhase] = React.useState<AIPhase | undefined>({
+    id: "facts",
+    name: "Phase 1 — Company Facts",
+    number: 1,
+    description: "Gathering broad facts, then narrowing to specifics",
+    reasoning: "I'm beginning with Phase 1 of our research methodology. Starting broad with industry and business model, then narrowing to specifics like product types, nexus, billing structure, and customer context to establish the factual foundation.",
+    status: "active"
+  });
+
+  // Handle phase change from dropdown
+  const handlePhaseChange = React.useCallback((phaseId: AIPhase['id']) => {
+    const phaseMap: Record<AIPhase['id'], AIPhase> = {
+      facts: {
+        id: "facts",
+        name: "Phase 1 — Company Facts",
+        number: 1,
+        description: "Gathering broad facts, then narrowing to specifics",
+        reasoning: "I'm in Phase 1 of our research methodology. Starting broad with industry and business model, then narrowing to specifics like product types, nexus, billing structure, and customer context.",
+        status: "active"
+      },
+      laws: {
+        id: "laws", 
+        name: "Phase 2 — Codes & Regulations",
+        number: 2,
+        description: "Broad-to-narrow legal research",
+        reasoning: "Now conducting Phase 2 - exhaustive legal research using broad-to-narrow approach. Starting with general statutes, then narrowing to context-specific applications, definitions, and exemptions.",
+        status: "active"
+      },
+      analysis: {
+        id: "analysis",
+        name: "Phase 3 — Analysis", 
+        number: 3,
+        description: "Synthesize law with company facts",
+        reasoning: "In Phase 3 - synthesizing the established law with your specific company facts to provide comprehensive guidance on tax implications and recommendations.",
+        status: "active"
+      }
+    };
+    
+    setCurrentPhase(phaseMap[phaseId]);
+    
+    // Add a thought about the phase change
+    const newThought: AIThought = {
+      id: `phase-change-${Date.now()}`,
+      timestamp: new Date(),
+      phase: phaseId,
+      trigger: `User manually switched to ${phaseMap[phaseId].name}`,
+      reasoning: `Adapting research focus to ${phaseMap[phaseId].description.toLowerCase()}. This allows targeted methodology application based on current research needs.`,
+      context: { userAction: 'phase_change' }
+    };
+    
+    setRecentThoughts(prev => [newThought, ...prev.slice(0, 2)]);
+  }, []);
+
+  const getTransitionThoughts = React.useCallback((fromStage: string, toStage: string): string[] => {
+    const transitions: Record<string, string[]> = {
+      "starting->facts_active": [
+        "I see the user is starting to work on company facts...",
+        "This is the perfect foundation for our advisory memo...",
+        "Let me focus on helping them gather key operational details..."
+      ],
+      "facts_active->facts_completed": [
+        "The user just completed the company facts gathering...",
+        "I now have a solid understanding of their operational situation...",
+        "Time to move to legal research phase..."
+      ],
+      "facts_completed->laws_active": [
+        "Facts are complete, unlocking legal research...",
+        "I need to help them find the applicable statutes and regulations...",
+        "Legal framework research is now available..."
+      ],
+      "laws_active->laws_completed": [
+        "Legal research actions completed successfully...",
+        "The user is making good progress on statutory analysis...",
+        "Soon we can move to synthesis phase..."
+      ],
+      "laws_completed->analysis_available": [
+        "Great! Both facts and laws are well-researched...",
+        "Now I have everything needed for comprehensive analysis...",
+        "Time to help synthesize all this research..."
+      ],
+      "analysis_available->analysis_active": [
+        "Analysis actions are ready for the user...",
+        "This will pull together facts, law, and conclusions...",
+        "Almost ready for final memo recommendations..."
+      ],
+      "dynamic_facts_added": [
+        "Wait, I'm detecting some gaps in the factual record...",
+        "Let me add one more critical fact-gathering action...",
+        "This will strengthen our legal analysis..."
+      ]
+    };
+    
+    return transitions[`${fromStage}->${toStage}`] || transitions["dynamic_facts_added"] || [
+      "Processing the user's recent progress...",
+      "Analyzing what needs to happen next...",
+      "Updating my strategy accordingly..."
+    ];
+  }, []);
+
+  // Detect current stage based on actual recommendation state
+  const getCurrentStageState = React.useCallback(() => {
+    const factsRecs = recs.filter(r => r.category === 'facts');
+    const lawsRecs = recs.filter(r => r.category === 'laws');
+    const analysisRecs = recs.filter(r => r.category === 'analysis');
+    
+    const factsCompleted = factsRecs.length > 0 && factsRecs.every(r => r.status === 'closed');
+    const lawsCompleted = lawsRecs.length > 0 && lawsRecs.every(r => r.status === 'closed');
+    const analysisStarted = analysisRecs.length > 0;
+    
+    if (analysisRecs.some(r => r.status === 'closed')) return 'analysis_completed';
+    if (analysisRecs.some(r => r.status !== 'closed')) return 'analysis_active';
+    if (analysisStarted) return 'analysis_available';
+    if (lawsCompleted) return 'laws_completed';
+    if (lawsRecs.some(r => r.status !== 'closed')) return 'laws_active';
+    if (lawsRecs.length > 0) return 'laws_available';
+    if (factsCompleted) return 'facts_completed';
+    if (factsRecs.some(r => r.status !== 'closed')) return 'facts_active';
+    if (factsRecs.length > 0) return 'facts_available';
+    return 'starting';
+  }, [recs]);
+
+  // 🚀 STARTUP SEQUENCE - Trigger when actions tab is first visited
+  React.useEffect(() => {
+    if (activeTab === 'actions' && !hasStartedUp && !isStartingUp && recs.length === 0) {
+      setIsStartingUp(true);
+      setStartupPhase(0);
+      
+      // Phase 1: Initial analysis
+      setTransitionThoughts([
+        "10X AI analyzing your workspace...",
+        "Detecting tax advisory opportunity...", 
+        "Reviewing Acme Retail company profile...",
+        "Structuring strategic approach..."
+      ]);
+      setIsTransitioning(true);
+      setCurrentThought(0);
+      
+      // Animate through startup thoughts
+      let thoughtIndex = 0;
+      const startupInterval = setInterval(() => {
+        thoughtIndex++;
+        if (thoughtIndex >= 4) {
+          clearInterval(startupInterval);
+          
+          // Phase 2: Add initial actions after analysis
+          setTimeout(() => {
+            setIsTransitioning(false);
+            setRecs(STARTUP_RECS);
+            setIsStartingUp(false);
+            setHasStartedUp(true);
+          }, 800);
+        } else {
+          setCurrentThought(thoughtIndex);
+        }
+      }, 1500); // Slower startup thinking
+    }
+  }, [activeTab, hasStartedUp, isStartingUp, recs.length]);
+
+  // Trigger transition animation when stage changes
+  React.useEffect(() => {
+    const currentStage = getCurrentStageState();
+    
+    if (currentStage !== lastStageState && lastStageState !== 'starting') {
+      // Stage changed - trigger thinking animation
+      const thoughts = getTransitionThoughts(lastStageState, currentStage);
+      setTransitionThoughts(thoughts);
+      setIsTransitioning(true);
+      setCurrentThought(0);
+      
+      // Animate through thoughts
+      let thoughtIndex = 0;
+      const thoughtInterval = setInterval(() => {
+        thoughtIndex++;
+        if (thoughtIndex >= thoughts.length) {
+          clearInterval(thoughtInterval);
+          // End transition
+          setTimeout(() => {
+            setIsTransitioning(false);
+            
+            // Add new actions based on stage changes
+            if (currentStage === 'facts_completed' && lastStageState === 'facts_active') {
+              // Add law actions when facts are completed
+              setRecs(prev => [...prev,
+                {
+                  id: "auto-law-1",
+                  title: "Research NJ economic nexus statute",
+                  intent: "add_evidence",
+                  category: "laws",
+                  status: "suggested",
+                  summary: "Analyze N.J.S.A. 54:32B-3.6 marketplace facilitator provisions.",
+                  instructions: "Add or review the files to be saved to the current research.",
+                  attachments: [
+                    { id: "src-nj-statute", name: "N.J.S.A. 54:32B-3.6", kind: "source" },
+                  ],
+                  context: { section: "Laws", issue: "Economic Nexus", jurisdictions: ["NJ"] },
+                },
+                {
+                  id: "auto-law-2", 
+                  title: "Review digital goods tax guidance",
+                  intent: "add_evidence",
+                  category: "laws",
+                  status: "suggested",
+                  summary: "Document NJ Division of Taxation guidance on digital marketplace sales.",
+                  instructions: "Add or review the files to be saved to the current research.",
+                  attachments: [
+                    { id: "src-nj-guidance", name: "NJ Division of Taxation ST-18", kind: "source" },
+                  ],
+                  context: { section: "Laws", issue: "Digital Goods", jurisdictions: ["NJ"] },
+                }
+              ]);
+            } else if (currentStage === 'laws_completed' && lastStageState === 'laws_active') {
+              // Add analysis actions when laws are completed
+              setRecs(prev => [...prev,
+                {
+                  id: "auto-analysis-1",
+                  title: "Draft nexus conclusion memo",
+                  intent: "draft",
+                  category: "analysis", 
+                  status: "ready_to_draft",
+                  summary: "Synthesize facts and law into final nexus determination.",
+                  instructions: "Generate analysis based on collected evidence.",
+                  attachments: [
+                    { id: "src-facts-summary", name: "Transaction Analysis Summary", kind: "source" },
+                    { id: "src-law-summary", name: "NJ Statute Analysis", kind: "source" },
+                  ],
+                  context: { section: "Analysis", issue: "Final Determination", jurisdictions: ["NJ"] },
+                }
+              ]);
+            }
+          }, 500);
+        } else {
+          setCurrentThought(thoughtIndex);
+        }
+      }, 1200); // 1.2 seconds between thoughts
+    }
+    
+    setLastStageState(currentStage);
+  }, [recs, lastStageState, getCurrentStageState, getTransitionThoughts]);
+
+  // Add additional fact-gathering action after laws are completed (dynamic iteration demo)
+  React.useEffect(() => {
+    const lawsRecs = recs.filter(r => r.category === 'laws');
+    const lawsCompleted = lawsRecs.length > 0 && lawsRecs.every(r => r.status === 'closed');
+    const hasExtraFact = recs.some(r => r.id === 'auto-fact-extra');
+    
+    if (lawsCompleted && !hasExtraFact) {
+      // After a short delay, add an additional fact-gathering action
+      const timer = setTimeout(() => {
+        setTransitionThoughts(["Wait, I'm detecting some gaps in the factual record...", "Let me add one more critical fact-gathering action...", "This will strengthen our legal analysis..."]);
+        setIsTransitioning(true);
+        setCurrentThought(0);
+        
+        let thoughtIndex = 0;
+        const thoughtInterval = setInterval(() => {
+          thoughtIndex++;
+          if (thoughtIndex >= 3) {
+            clearInterval(thoughtInterval);
+            setTimeout(() => {
+              setIsTransitioning(false);
+              setRecs(prev => [...prev,
+                {
+                  id: "auto-fact-extra",
+                  title: "Verify 2024 transaction thresholds", 
+                  intent: "add_evidence",
+                  category: "facts",
+                  status: "suggested",
+                  summary: "Cross-reference Q4 data to confirm exceeding 200 transaction threshold.",
+                  instructions: "Add or review the files to be saved to the current research.",
+                  context: { section: "Facts", issue: "Threshold Analysis", jurisdictions: ["NJ"] },
+                }
+              ]);
+            }, 500);
+          } else {
+            setCurrentThought(thoughtIndex);
+          }
+        }, 1200);
+      }, 3000); // 3 second delay after laws completion
+      
+      return () => clearTimeout(timer);
+    }
+  }, [recs]);
 
   const chatBottomRef = React.useRef<HTMLDivElement | null>(null);
   const chatInputRef = React.useRef<HTMLInputElement | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
-  const libFileRef = React.useRef<HTMLInputElement | null>(null);
   const editorRef = React.useRef<EditorHandle | null>(null);
   const pendingSourcesRef = React.useRef<SourceItem[]>([]);
+  const actionStatusMemory = React.useRef<Map<string, Recommendation["status"]>>(new Map());
+  const activeDocument = React.useMemo(() => {
+    if (documents.length === 0) return null;
+    const match = documents.find((doc) => doc.id === activeDocumentId);
+    return match ?? documents[0];
+  }, [activeDocumentId, documents]);
+  const activeDocumentContent =
+    activeDocument && activeDocument.kind === "matrix" ? "" : activeDocument?.content ?? "";
+  const activeMatrix = React.useMemo(() => {
+    if (activeDocument?.kind !== "matrix") return null;
+    return activeDocument.matrix ?? DEFAULT_MATRIX;
+  }, [activeDocument]);
+  const workspaceSource = React.useMemo(
+    () => (workspaceSourceId ? sources.find((src) => src.id === workspaceSourceId) ?? null : null),
+    [sources, workspaceSourceId]
+  );
+  const workspaceSourcePreview = React.useMemo(() => {
+    if (!workspaceSource) return [];
+    const preview = workspaceSource.preview ?? "No preview available for this source.";
+    return preview
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }, [workspaceSource]);
   const selectedSource = React.useMemo(
     () => sources.find((s) => s.id === selectedSourceId) ?? null,
     [sources, selectedSourceId]
   );
+  const projectBreadcrumb = React.useMemo(() => {
+    if (workspaceSource) return `${projectName} / Source / ${workspaceSource.name}`;
+    if (!activeDocument) return projectName;
+    return `${projectName} / ${activeDocument.name}`;
+  }, [activeDocument, projectName, workspaceSource]);
   const editorFlexClass = React.useMemo(() => {
     if (showLibrary && showRightPanel) return "flex-[3]";
     if (!showLibrary && !showRightPanel) return "flex-1";
@@ -472,6 +994,36 @@ export function SidekickShell() {
     setSelectedAttachmentIds((prev) => prev.filter((id) => sources.some((src) => src.id === id)));
   }, [sources]);
 
+  const postAssistant = React.useCallback(
+    (text: string) => setMessages((prev) => [...prev, <Bubble role="ai" key={`ai-${prev.length}`}>{text}</Bubble>]),
+    []
+  );
+
+  React.useEffect(() => {
+    if (documents.length === 0) {
+      if (activeDocumentId) {
+        setActiveDocumentId("");
+      }
+      return;
+    }
+    const exists = documents.some((doc) => doc.id === activeDocumentId);
+    if (!exists) {
+      setActiveDocumentId(documents[0].id);
+    }
+  }, [activeDocumentId, documents]);
+
+  const setActiveDocumentContent = React.useCallback(
+    (next: string) => {
+      if (!activeDocument || activeDocument.kind === "matrix") return;
+      const docId = activeDocument.id;
+      const timestamp = new Date().toISOString();
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === docId ? { ...doc, content: next, updatedAt: timestamp } : doc))
+      );
+    },
+    [activeDocument]
+  );
+
   const queueSourcesForDraft = React.useCallback((items: SourceItem[]) => {
     pendingSourcesRef.current = items;
   }, []);
@@ -489,6 +1041,9 @@ export function SidekickShell() {
   const openSourcePreview = React.useCallback((id: string | null, highlight?: string | null) => {
     setSelectedSourceId(id);
     setSourceHighlight(highlight ?? null);
+    if (id) {
+      setWorkspaceSourceId(null);
+    }
   }, []);
 
   const handleSelectSource = React.useCallback(
@@ -498,9 +1053,339 @@ export function SidekickShell() {
     [openSourcePreview]
   );
 
+  const handleSelectFileSource = React.useCallback(
+    (sourceId: string, sourceName: string) => {
+      // Create a SourceItem-like object for the file
+      const sourceItem: SourceItem = {
+        id: sourceId,
+        name: sourceName,
+        kind: "other" as const,
+        category: "facts" as const,
+        addedAt: new Date().toISOString(),
+      };
+      handleSelectSource(sourceItem);
+    },
+    [handleSelectSource]
+  );
+
+  const handleSelectDocument = React.useCallback(
+    (doc: ProjectDocument) => {
+      setActiveDocumentId(doc.id);
+      openSourcePreview(null);
+      setWorkspaceSourceId(null);
+    },
+    [openSourcePreview]
+  );
+
+  const openDocumentModal = React.useCallback(() => {
+    const suffix = documents.length + 1;
+    setDocModalMode("template");
+    setDocModalTemplate("memo");
+    setDocModalName(`${DOCUMENT_TEMPLATES.memo.name} ${suffix}`);
+    setDocModalKind(DOCUMENT_TEMPLATES.memo.kind);
+    setDocModalFile(null);
+    setDocModalFileContent(null);
+    setDocModalNameTouched(false);
+    setShowDocModal(true);
+  }, [documents.length]);
+
+  const closeDocumentModal = React.useCallback(() => {
+    setShowDocModal(false);
+    setDocModalFile(null);
+    setDocModalFileContent(null);
+    setDocModalNameTouched(false);
+  }, []);
+
+  const openSourceModal = React.useCallback(() => {
+    setSourceModalCategory("facts");
+    setSourceModalFile(null);
+    setSourceModalPreview(null);
+    setShowSourceModal(true);
+  }, []);
+
+  const closeSourceModal = React.useCallback(() => {
+    setShowSourceModal(false);
+    setSourceModalFile(null);
+    setSourceModalPreview(null);
+  }, []);
+
+  const openSourceInWorkspace = React.useCallback(
+    (src: SourceItem) => {
+      setWorkspaceSourceId(src.id);
+      setSelectedSourceId(null);
+      setSourceHighlight(null);
+    },
+    []
+  );
+
+  const closeWorkspaceSource = React.useCallback(() => {
+    setWorkspaceSourceId(null);
+  }, []);
+
+  const updateMatrix = React.useCallback(
+    (updater: (matrix: MatrixDocument) => MatrixDocument) => {
+      if (!activeDocumentId) return;
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id !== activeDocumentId || doc.kind !== "matrix") return doc;
+          const base = doc.matrix ?? DEFAULT_MATRIX;
+          const draft = cloneMatrix(base);
+          const nextMatrix = updater(draft);
+          return {
+            ...doc,
+            matrix: nextMatrix,
+            content: doc.content ?? "",
+            updatedAt: new Date().toISOString(),
+          };
+        })
+      );
+    },
+    [activeDocumentId]
+  );
+
+  const handleMatrixQuestionChange = React.useCallback(
+    (rowIndex: number, value: string) => {
+      updateMatrix((matrix) => {
+        if (!matrix.rows[rowIndex]) return matrix;
+        matrix.rows[rowIndex] = { ...matrix.rows[rowIndex], question: value };
+        return matrix;
+      });
+    },
+    [updateMatrix]
+  );
+
+  const handleMatrixCellChange = React.useCallback(
+    (rowIndex: number, columnIndex: number, value: string) => {
+      updateMatrix((matrix) => {
+        if (!matrix.rows[rowIndex]) return matrix;
+        const targetRow = matrix.rows[rowIndex];
+        const cells = targetRow.cells.slice();
+        cells[columnIndex] = { ...cells[columnIndex], value };
+        matrix.rows[rowIndex] = { ...targetRow, cells };
+        return matrix;
+      });
+    },
+    [updateMatrix]
+  );
+
+  const handleMatrixJurisdictionChange = React.useCallback(
+    (columnIndex: number, value: string) => {
+      updateMatrix((matrix) => {
+        if (!matrix.jurisdictions[columnIndex]) return matrix;
+        const jurisdictions = matrix.jurisdictions.slice();
+        jurisdictions[columnIndex] = value;
+        return { ...matrix, jurisdictions };
+      });
+    },
+    [updateMatrix]
+  );
+
+  const handleMatrixAddRow = React.useCallback(() => {
+    updateMatrix((matrix) => {
+      const cells = matrix.jurisdictions.map(() => ({ value: "" }));
+      const newRow = {
+        question: `New question ${matrix.rows.length + 1}`,
+        cells,
+      };
+      return { ...matrix, rows: [...matrix.rows, newRow] };
+    });
+  }, [updateMatrix]);
+
+  const handleMatrixAddColumn = React.useCallback(() => {
+    updateMatrix((matrix) => {
+      const newJurisdiction = `Jurisdiction ${matrix.jurisdictions.length + 1}`;
+      const jurisdictions = [...matrix.jurisdictions, newJurisdiction];
+      const rows = matrix.rows.map((row) => ({
+        ...row,
+        cells: [...row.cells, { value: "" }],
+      }));
+      return { jurisdictions, rows };
+    });
+  }, [updateMatrix]);
+
+  const handleDocModeChange = React.useCallback(
+    (mode: "template" | "upload") => {
+      setDocModalMode(mode);
+      if (mode === "template") {
+        const info = DOCUMENT_TEMPLATES[docModalTemplate];
+        setDocModalKind(info.kind);
+        setDocModalFile(null);
+        setDocModalFileContent(null);
+      } else {
+        setDocModalKind("memo");
+        setDocModalFile(null);
+        setDocModalFileContent(null);
+      }
+    },
+    [docModalTemplate]
+  );
+
+  const handleDocTemplateChange = React.useCallback(
+    (template: TemplateKey) => {
+      setDocModalTemplate(template);
+      const info = DOCUMENT_TEMPLATES[template];
+      setDocModalKind(info.kind);
+      setDocModalFile(null);
+      setDocModalFileContent(null);
+      if (!docModalNameTouched) {
+        const suffix = documents.length + 1;
+        setDocModalName(`${info.name} ${suffix}`);
+      }
+    },
+    [docModalNameTouched, documents.length]
+  );
+
+  const handleDocNameChange = React.useCallback((value: string) => {
+    setDocModalName(value);
+    setDocModalNameTouched(true);
+  }, []);
+
+  const handleDocUploadChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0] ?? null;
+      setDocModalFile(file);
+      setDocModalFileContent(null);
+      if (file) {
+        if (!docModalNameTouched) {
+          const base = file.name.replace(/\.[^.]+$/, "") || "Uploaded Document";
+          setDocModalName(base);
+        }
+        if (file.type.startsWith("text/") || /\.txt$/i.test(file.name)) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            setDocModalFileContent(typeof reader.result === "string" ? reader.result : null);
+          };
+          reader.onerror = () => setDocModalFileContent(null);
+          reader.readAsText(file);
+        }
+      }
+      e.target.value = "";
+    },
+    [docModalNameTouched]
+  );
+
+  const handleDocModalConfirm = React.useCallback(() => {
+    if (docModalMode === "upload" && !docModalFile) return;
+    const trimmedName = docModalName.trim() || DOCUMENT_TEMPLATES[docModalTemplate].name;
+    let kind: DocumentKind;
+    let content = "";
+    let matrix: MatrixDocument | undefined;
+
+  if (docModalMode === "template") {
+    const info = DOCUMENT_TEMPLATES[docModalTemplate];
+    kind = info.kind;
+    if (info.kind === "matrix" && info.matrix) {
+      matrix = cloneMatrix(info.matrix);
+      content = info.content ?? "";
+    } else {
+      content = info.content ?? "";
+    }
+  } else {
+      kind = docModalKind;
+      const fallbackName = docModalFile?.name ?? trimmedName;
+      const fallbackText = `Uploaded file: ${fallbackName}`;
+      const fallbackContent = `<p><strong>Uploaded file:</strong> ${escapeHtml(fallbackName)}</p>`;
+      content =
+        docModalFileContent && docModalFileContent.trim().length > 0
+          ? paragraphsFrom(docModalFileContent, fallbackText)
+          : fallbackContent;
+    }
+
+    const timestamp = new Date().toISOString();
+    const id = `doc-${Date.now()}`;
+    setDocuments((prev) => [
+      {
+        id,
+        name: trimmedName,
+        kind,
+        content: content ?? "",
+        ...(matrix ? { matrix } : {}),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      ...prev,
+    ]);
+    setActiveDocumentId(id);
+    setWorkspaceSourceId(null);
+    openSourcePreview(null);
+    closeDocumentModal();
+  }, [
+    closeDocumentModal,
+    docModalFile,
+    docModalFileContent,
+    docModalKind,
+    docModalMode,
+    docModalName,
+    docModalTemplate,
+    openSourcePreview,
+  ]);
+
+  const handleSourceFileChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setSourceModalFile(file);
+    setSourceModalPreview(null);
+    if (file) {
+      if (file.type.startsWith("text/") || /\.txt$/i.test(file.name)) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = typeof reader.result === "string" ? reader.result.trim() : "";
+          setSourceModalPreview(text ? text.slice(0, 600) : null);
+        };
+        reader.onerror = () => setSourceModalPreview(null);
+        reader.readAsText(file);
+      }
+    }
+    e.target.value = "";
+  }, []);
+
+  const handleSourceModalConfirm = React.useCallback(() => {
+    if (!sourceModalFile) return;
+    const file = sourceModalFile;
+    const id = `src-${Date.now()}`;
+    const href = `source://${id}`;
+    const preview =
+      sourceModalPreview && sourceModalPreview.trim().length > 0
+        ? sourceModalPreview
+        : defaultPreviewForSource(file.name, sourceModalCategory);
+    const src: SourceItem = {
+      id,
+      name: file.name,
+      kind: extToKind(file.name),
+      category: sourceModalCategory,
+      addedAt: new Date().toISOString(),
+      href,
+      missing: false,
+      origin: "upload",
+      preview,
+    };
+    setSources((prev) => [src, ...prev]);
+    const folderLabel =
+      sourceModalCategory === "facts"
+        ? "Facts"
+        : sourceModalCategory === "laws"
+        ? "Laws & Authority"
+        : sourceModalCategory === "explanations"
+        ? "Explanations"
+        : "Prior Work";
+    openSourcePreview(src.id);
+    closeSourceModal();
+    setTimeout(() => {
+      postAssistant(`Uploaded ${file.name} to the ${folderLabel} folder.`);
+    }, 0);
+  }, [
+    closeSourceModal,
+    openSourcePreview,
+    postAssistant,
+    sourceModalCategory,
+    sourceModalFile,
+    sourceModalPreview,
+  ]);
+
   React.useEffect(() => {
-    if (!doc) return;
-    const anchors = deriveSectionAnchors(doc);
+    if (!activeDocument || activeDocument.kind === "matrix") return;
+    const content = activeDocument.content ?? "";
+    if (!content) return;
+    const anchors = deriveSectionAnchors(content);
     setValidationIssues((prev) => {
       let changed = false;
       const next = prev.map((issue) => {
@@ -516,7 +1401,7 @@ export function SidekickShell() {
       });
       return changed ? next : prev;
     });
-  }, [doc]);
+  }, [activeDocument]);
 
   const toggleJurisdiction = React.useCallback((code: string) => {
     setWizardJurisdictions((prev) =>
@@ -530,11 +1415,6 @@ export function SidekickShell() {
     );
   }, []);
 
-  const postAssistant = React.useCallback(
-    (text: string) => setMessages((prev) => [...prev, <Bubble role="ai" key={`ai-${prev.length}`}>{text}</Bubble>]),
-    []
-  );
-
   const handleFinishWizard = React.useCallback(() => {
     if (wizardDocName) {
       const finalPreview = buildWizardDocPreview({
@@ -545,11 +1425,20 @@ export function SidekickShell() {
         client: wizardClient,
       });
       setWizardDocPreview(finalPreview);
-      setDoc(finalPreview);
+      if (activeDocument && activeDocument.kind !== "matrix") {
+        const timestamp = new Date().toISOString();
+        setDocuments((prev) =>
+          prev.map((doc) =>
+            doc.id === activeDocument.id
+              ? { ...doc, name: wizardDocName, content: finalPreview, updatedAt: timestamp }
+              : doc
+          )
+        );
+      }
     }
     setShowOnboarding(false);
     setWizardStep(0);
-  }, [wizardCategories, wizardClient, wizardDocName, wizardIssue, wizardJurisdictions]);
+  }, [activeDocument, wizardCategories, wizardClient, wizardDocName, wizardIssue, wizardJurisdictions]);
 
   const handleWizardLibraryUpload = (file: File, category: SourceCategory) => {
     const id = `wiz-${Date.now()}`;
@@ -584,6 +1473,11 @@ export function SidekickShell() {
 
   const handleInsertSourceLink = React.useCallback(
     (source: SourceItem) => {
+      if (!activeDocument || activeDocument.kind === "matrix") {
+        setActiveTab("chat");
+        postAssistant("I'll support dropping citations directly into matrices soon. Please paste the reference into the grid for now.");
+        return;
+      }
       const href = source.href ?? `source://${source.id}`;
       if (!source.href || source.missing) {
         setSources((prev) =>
@@ -594,11 +1488,13 @@ export function SidekickShell() {
       setActiveTab("chat");
       postAssistant(`Linked to source: ${source.name}`);
     },
-    [postAssistant]
+    [activeDocument, postAssistant]
   );
 
   React.useEffect(() => {
-    const links = parseLinksFromDocument(doc);
+    if (!activeDocument || activeDocument.kind === "matrix") return;
+    const content = activeDocument.content ?? "";
+    const links = parseLinksFromDocument(content);
     setSources((prev) => {
       let changed = false;
       const next: SourceItem[] = [];
@@ -686,7 +1582,7 @@ export function SidekickShell() {
 
       return changed ? next : prev;
     });
-  }, [doc]);
+  }, [activeDocument]);
 
   const handleRecAct = (rec: Recommendation) => {
     setRecs((rs) => rs.map((r) => (r.id === rec.id ? { ...r, status: "in_progress" as RecStatus } : r)));
@@ -715,14 +1611,6 @@ export function SidekickShell() {
     if (rec.intent === "re_score" || rec.intent === "re_analyze") {
       setActiveTab("validate");
       postAssistant("Re-scoring citations and updating section risk...");
-    }
-  };
-
-  const dismissRec = (id: string) => {
-    setRecs((rs) => rs.map((r) => (r.id === id ? { ...r, status: "closed" as RecStatus } : r)));
-    const rec = recs.find((r) => r.id === id);
-    if (rec) {
-      postAssistant(`Dismissed action: ${rec.title}`);
     }
   };
 
@@ -899,33 +1787,6 @@ export function SidekickShell() {
     e.target.value = "";
   };
 
-  const handleLibFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const id = `src-${Date.now()}`;
-    const href = `source://${id}`;
-    const src: SourceItem = {
-      id,
-      name: file.name,
-      kind: extToKind(file.name),
-      category: "facts",
-      addedAt: new Date().toISOString(),
-      href,
-      missing: false,
-      origin: "upload",
-      preview: defaultPreviewForSource(file.name, "facts"),
-    };
-    setSources((prev) => {
-      const filtered = prev.filter((item) => item.id !== id && item.href !== href);
-      return [src, ...filtered];
-    });
-    setMessages((prev) => [
-      ...prev,
-      <Bubble role="ai" key={`libadd-${prev.length}`}>Added <strong>{file.name}</strong> to the Library.</Bubble>,
-    ]);
-    e.target.value = "";
-  };
-
   const selectIssue = (i: ValidationIssue) => {
     setSelectedIssue(i);
     const hit =
@@ -992,6 +1853,32 @@ export function SidekickShell() {
   const makeList = () => {
     editorRef.current?.toggleBulletList();
   };
+
+  const toggleActionCompletion = React.useCallback(
+    (id: string, completed: boolean) => {
+      setRecs((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+          if (completed) {
+            actionStatusMemory.current.set(id, item.status);
+            return { ...item, status: "closed" as RecStatus };
+          }
+          const fallback = actionStatusMemory.current.get(id);
+          const restored =
+            fallback && fallback !== "closed" ? fallback : ("suggested" as RecStatus);
+          return { ...item, status: restored };
+        })
+      );
+    },
+    []
+  );
+
+  const docModalReady =
+    docModalMode === "template"
+      ? docModalName.trim().length > 0
+      : docModalName.trim().length > 0 && Boolean(docModalFile);
+
+  const sourceModalReady = Boolean(sourceModalFile);
 
   const stepOneReady = wizardIssue.trim().length > 0 && Boolean(wizardClient);
 
@@ -1226,9 +2113,199 @@ export function SidekickShell() {
         </div>
       )}
 
+      {showDocModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur">
+          <div className="w-full max-w-xl rounded-xl border bg-card text-card-foreground shadow-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div>
+                <h2 className="text-lg font-semibold">Create document</h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose a template or upload a document to add it to this project.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeDocumentModal} aria-label="Close document dialog">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Document name</label>
+                <input
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={docModalName}
+                  onChange={(e) => handleDocNameChange(e.target.value)}
+                  placeholder="Enter document title"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">Creation mode</span>
+                <div className="flex items-center gap-4 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      className="h-4 w-4 text-primary focus:ring-primary"
+                      checked={docModalMode === "template"}
+                      onChange={() => handleDocModeChange("template")}
+                    />
+                    Use template
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      className="h-4 w-4 text-primary focus:ring-primary"
+                      checked={docModalMode === "upload"}
+                      onChange={() => handleDocModeChange("upload")}
+                    />
+                    Upload file
+                  </label>
+                </div>
+              </div>
+
+              {docModalMode === "template" ? (
+                <div className="grid gap-2">
+                  {DOCUMENT_TEMPLATE_OPTIONS.map((opt) => {
+                    const selected = docModalTemplate === opt.value;
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                          selected ? "border-primary bg-primary/5" : "border-muted hover:bg-muted/50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          className="mt-1 h-4 w-4 text-primary focus:ring-primary"
+                          checked={selected}
+                          onChange={() => handleDocTemplateChange(opt.value)}
+                        />
+                        <div>
+                          <div className="text-sm font-medium">{opt.title}</div>
+                          <div className="text-xs text-muted-foreground">{opt.description}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Document type</label>
+                    <select
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={docModalKind}
+                      onChange={(e) => setDocModalKind(e.target.value as DocumentKind)}
+                    >
+                      {Object.entries(DOCUMENT_KIND_LABELS)
+                        .filter(([value]) => value !== "matrix")
+                        .map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Upload file</label>
+                    <input
+                      type="file"
+                      className="w-full text-sm file:mr-3 file:rounded file:border file:border-input file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-muted/80 cursor-pointer"
+                      onChange={handleDocUploadChange}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {docModalFile
+                        ? `Selected file: ${docModalFile.name}`
+                        : "Supported text files will import their contents automatically."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+              <Button variant="ghost" onClick={closeDocumentModal}>
+                Cancel
+              </Button>
+              <Button onClick={handleDocModalConfirm} disabled={!docModalReady}>
+                Create document
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSourceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur">
+          <div className="w-full max-w-md rounded-xl border bg-card text-card-foreground shadow-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div>
+                <h2 className="text-lg font-semibold">Add source</h2>
+                <p className="text-sm text-muted-foreground">
+                  Upload supporting material and choose where it belongs in the library.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeSourceModal} aria-label="Close source dialog">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Source category</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={sourceModalCategory}
+                  onChange={(e) => setSourceModalCategory(e.target.value as SourceCategory)}
+                >
+                  <option value="facts">Facts</option>
+                  <option value="laws">Laws</option>
+                  <option value="explanations">Explanations</option>
+                  <option value="prior">Prior work</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Upload file</label>
+                <input
+                  type="file"
+                  className="w-full text-sm file:mr-3 file:rounded file:border file:border-input file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-muted/80 cursor-pointer"
+                  onChange={handleSourceFileChange}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {sourceModalFile ? `Selected file: ${sourceModalFile.name}` : "Choose a file to add it to the library."}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">Preview</span>
+                <div className="rounded-md border border-muted bg-muted/30 p-2 text-xs max-h-40 overflow-auto whitespace-pre-wrap">
+                  {sourceModalPreview
+                    ? sourceModalPreview
+                    : sourceModalFile
+                    ? "Preview not available for this file type."
+                    : "Select a file to see a quick preview."}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+              <Button variant="ghost" onClick={closeSourceModal}>
+                Cancel
+              </Button>
+              <Button onClick={handleSourceModalConfirm} disabled={!sourceModalReady}>
+                Add source
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full h-screen bg-background text-foreground flex flex-col">
         <div className="px-3 py-2 border-b flex items-center gap-3">
-          <div className="font-semibold truncate max-w-[320px]">{projectName}</div>
+          <div className="flex items-center gap-1 font-semibold truncate max-w-[420px]" title={projectBreadcrumb}>
+            <span className="truncate">{projectName}</span>
+            {activeDocument && (
+              <>
+                <span className="text-muted-foreground">/</span>
+                <span className="truncate text-sm font-medium text-muted-foreground">{activeDocument.name}</span>
+              </>
+            )}
+          </div>
           <Separator orientation="vertical" className="h-5" />
 
           <div className="flex items-center gap-1">
@@ -1281,6 +2358,7 @@ export function SidekickShell() {
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="actions">Actions</TabsTrigger>
                 <TabsTrigger value="validate">Validate</TabsTrigger>
+                <TabsTrigger value="workflow">Workflow</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -1290,12 +2368,17 @@ export function SidekickShell() {
           {showLibrary ? (
             <div className="relative">
               <LibrarySidebar
+                documents={documents}
+                activeDocumentId={activeDocument?.id ?? null}
+                onSelectDocument={handleSelectDocument}
+                onCreateDocument={openDocumentModal}
+                onUploadSource={openSourceModal}
+                onOpenInWorkspace={openSourceInWorkspace}
                 sources={sources}
                 query={libQuery}
                 categoryFilter={libCategory}
                 onQuery={setLibQuery}
                 onCategory={setLibCategory}
-                onPickFile={() => libFileRef.current?.click()}
                 onInsertLink={handleInsertSourceLink}
                 selectedSource={selectedSource}
                 onSelectSource={handleSelectSource}
@@ -1337,10 +2420,85 @@ export function SidekickShell() {
               </Tooltip>
             </div>
           )}
-          <input ref={libFileRef} type="file" className="hidden" onChange={handleLibFile} />
-
-          <div className={`${editorFlexClass} min-w-0 min-h-0`}>
-            <MemoSimpleEditor ref={editorRef as React.Ref<EditorHandle>} value={doc} onChange={setDoc} />
+          <div className={`${editorFlexClass} min-w-0 min-h-0 relative`}>
+            {activeDocument?.kind === "matrix" && activeMatrix ? (
+              <MatrixEditor
+                matrix={activeMatrix}
+                onChangeJurisdiction={handleMatrixJurisdictionChange}
+                onChangeQuestion={handleMatrixQuestionChange}
+                onChangeCell={handleMatrixCellChange}
+                onAddRow={handleMatrixAddRow}
+                onAddColumn={handleMatrixAddColumn}
+              />
+            ) : (
+              <MemoSimpleEditor
+                ref={editorRef as React.Ref<EditorHandle>}
+                value={activeDocumentContent}
+                onChange={setActiveDocumentContent}
+              />
+            )}
+            {workspaceSource && (
+              <div className="absolute inset-0 z-30 flex flex-col bg-background">
+                <div className="px-4 py-3 border-b space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Button variant="ghost" size="sm" className="gap-1" onClick={closeWorkspaceSource}>
+                      <ChevronLeft className="w-4 h-4" /> Back to document
+                    </Button>
+                    <div className="flex items-center gap-2">
+                      {workspaceSource.href && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => window.open(workspaceSource.href ?? "#", "_blank", "noopener,noreferrer")}
+                          aria-label="Open source link"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="text-sm sm:text-base font-semibold leading-6 break-words text-foreground">
+                        {workspaceSource.name}
+                      </div>
+                      {workspaceSource.href && (
+                        <div className="text-[11px] text-muted-foreground break-all leading-4">
+                          {workspaceSource.href.replace(/^https?:\/\//, "")}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleInsertSourceLink(workspaceSource)}
+                      aria-label="Cite source"
+                    >
+                      <Link2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="px-4 py-2 border-b text-xs text-muted-foreground flex items-center gap-3">
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {workspaceSource.category === "prior" ? "Prior work" : workspaceSource.category}
+                  </Badge>
+                  <span>Uploaded {new Date(workspaceSource.addedAt).toLocaleDateString()}</span>
+                </div>
+                <ScrollArea className="flex-1 px-4 py-4">
+                  <div className="space-y-3 text-sm leading-6">
+                    {workspaceSourcePreview.length === 0 ? (
+                      <div className="text-muted-foreground">No preview available for this source.</div>
+                    ) : (
+                      workspaceSourcePreview.map((para, idx) => (
+                        <p key={`workspace-source-${idx}`} className="text-muted-foreground whitespace-pre-wrap break-words">
+                          {para}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
           </div>
 
           {showRightPanel ? (
@@ -1534,7 +2692,20 @@ export function SidekickShell() {
                 )}
 
                 {activeTab === "actions" && (
-                  <AllActionsPanel items={recs} onAct={handleRecAct} onDismiss={dismissRec} />
+                  <>
+                    <AllActionsPanel
+                      items={recs}
+                      onAct={handleRecAct}
+                      onToggleAction={toggleActionCompletion}
+                      onSelectSource={handleSelectFileSource}
+                      isTransitioning={isTransitioning}
+                      transitionThoughts={transitionThoughts}
+                      currentThought={currentThought}
+                      recentThoughts={recentThoughts}
+                      currentPhase={currentPhase}
+                      onPhaseChange={handlePhaseChange}
+                    />
+                  </>
                 )}
 
                 {activeTab === "validate" && (
@@ -1545,6 +2716,10 @@ export function SidekickShell() {
                     onSelect={selectIssue}
                     onFix={fixIssueWithAI}
                   />
+                )}
+
+                {activeTab === "workflow" && (
+                  <ActionWorkflow />
                 )}
               </div>
             </div>
@@ -1569,5 +2744,94 @@ export function SidekickShell() {
         </div>
       </div>
     </TooltipProvider>
+  );
+}
+
+type MatrixEditorProps = {
+  matrix: MatrixDocument;
+  onChangeJurisdiction: (columnIndex: number, value: string) => void;
+  onChangeQuestion: (rowIndex: number, value: string) => void;
+  onChangeCell: (rowIndex: number, columnIndex: number, value: string) => void;
+  onAddRow: () => void;
+  onAddColumn: () => void;
+};
+
+function MatrixEditor({
+  matrix,
+  onChangeJurisdiction,
+  onChangeQuestion,
+  onChangeCell,
+  onAddRow,
+  onAddColumn,
+}: MatrixEditorProps) {
+  return (
+    <div className="h-full flex flex-col bg-background">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold">Matrix workspace</h2>
+          <p className="text-xs text-muted-foreground">
+            Compare jurisdictional answers row-by-row and capture supporting citations.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onAddColumn}>
+            Add column
+          </Button>
+          <Button size="sm" onClick={onAddRow}>
+            Add row
+          </Button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto px-4 py-4">
+        <div className="min-w-max">
+          <table className="border-collapse text-sm">
+            <thead>
+              <tr className="align-top">
+                <th className="border border-muted bg-muted/70 px-3 py-2 text-left text-xs uppercase tracking-wide text-muted-foreground w-60">
+                  Legal question
+                </th>
+                {matrix.jurisdictions.map((jurisdiction, colIdx) => (
+                  <th key={`matrix-head-${colIdx}`} className="border border-muted bg-muted/50 px-2 py-2 text-left">
+                    <input
+                      value={jurisdiction}
+                      onChange={(e) => onChangeJurisdiction(colIdx, e.target.value)}
+                      className="w-48 rounded-md border border-input bg-background px-2 py-1 text-sm font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.rows.map((row, rowIdx) => (
+                <tr key={`matrix-row-${rowIdx}`} className="align-top">
+                  <td className="border border-muted bg-background px-2 py-2">
+                    <textarea
+                      value={row.question}
+                      onChange={(e) => onChangeQuestion(rowIdx, e.target.value)}
+                      className="w-60 min-h-[72px] resize-y rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="State the legal question…"
+                    />
+                  </td>
+                  {matrix.jurisdictions.map((_, colIdx) => (
+                    <td key={`matrix-cell-${rowIdx}-${colIdx}`} className="border border-muted bg-background px-2 py-2">
+                      <textarea
+                        value={row.cells[colIdx]?.value ?? ""}
+                        onChange={(e) => onChangeCell(rowIdx, colIdx, e.target.value)}
+                        className="w-56 min-h-[72px] resize-y rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        placeholder="Add answer & cite authority…"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="px-4 py-2 border-t text-xs text-muted-foreground">
+        Tip: capture citations directly in each cell (e.g., “Cite: N.J.S.A. 54:32B-3.6”). Use the controls above to add
+        more jurisdictions or questions as your analysis evolves.
+      </div>
+    </div>
   );
 }
