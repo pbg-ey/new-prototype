@@ -44,7 +44,7 @@ import { LibrarySidebar } from "./library/LibrarySidebar";
 import { useAutoScroll } from "./utils/ui";
 import { AllActionsPanel } from "./right-panel/ActionsPanel";
 import { ValidatePanel } from "./right-panel/ValidatePanel";
-import { ActionWorkflow } from "./right-panel/ActionWorkflow";
+import { WorkflowPanel } from "./right-panel/WorkflowPanel";
 import { Bubble } from "./right-panel/_shared/Bubble";
 import { EditCard } from "./right-panel/_shared/EditCard";
 import { UploadPromptCard } from "./right-panel/_shared/UploadPromptCard";
@@ -2719,7 +2719,7 @@ export function SidekickShell() {
                 )}
 
                 {activeTab === "workflow" && (
-                  <ActionWorkflow />
+                  <WorkflowPanel />
                 )}
               </div>
             </div>

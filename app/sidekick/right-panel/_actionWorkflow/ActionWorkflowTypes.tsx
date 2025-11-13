@@ -18,6 +18,8 @@ export interface WorkflowAction {
     trigger: string;
     reasoning: string;
   };
+  sourceAnalysis?: SourceAnalysis;
+  needsUserSources?: boolean;
 }
 
 export interface AIThoughtStep {
@@ -46,6 +48,16 @@ export interface PhaseInsight {
   keyTasks: string[];
 }
 
+export interface SourceAnalysis {
+  id: string;
+  status: 'analyzing' | 'sufficient' | 'insufficient' | 'irrelevant';
+  confidence: number;
+  relevanceScore: number;
+  gaps?: string[];
+  recommendations?: string[];
+  analyzedAt: Date;
+}
+
 export interface WorkflowSource {
   id: string;
   name: string;
@@ -53,6 +65,7 @@ export interface WorkflowSource {
   status: "pending" | "uploading" | "ready" | "error";
   size?: string;
   uploadProgress?: number;
+  analysis?: SourceAnalysis;
 }
 
 export interface GeneratedContent {
@@ -70,4 +83,33 @@ export interface ValidationResult {
   status: "pass" | "warning" | "fail";
   message: string;
   severity: "low" | "medium" | "high";
+}
+
+export interface AiAnalysisState {
+  isAnalyzing: boolean;
+  analysisType: 'actions' | 'phases' | 'both';
+  progress: number;
+  currentStep: string;
+  startedAt: Date;
+}
+
+export interface PhaseRecommendation {
+  id: string;
+  suggestedName: string;
+  suggestedDescription: string;
+  reasoning: string;
+  confidence: number;
+  requiredActions: string[];
+  createdAt: Date;
+}
+
+export interface AiNotification {
+  id: string;
+  type: 'phase_suggestion' | 'actions_updated' | 'analysis_complete' | 'info';
+  title: string;
+  message: string;
+  actionable?: boolean;
+  data?: PhaseRecommendation;
+  createdAt: Date;
+  dismissed?: boolean;
 }
